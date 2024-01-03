@@ -3,6 +3,7 @@
 #include <conio.h>
 #include <tchar.h>
 #include <bits/stdc++.h>
+#include <limits>
 using namespace std;
 
 #define BUF_SIZE 256
@@ -12,9 +13,16 @@ bool continueProc;
 
 int _tmain()
 {
-   HANDLE hMapFile;
+   HANDLE hMapFile, hSemaphore;
    LPCTSTR pBuf;
    continueProc = true;
+
+   // Create the semaphore
+    hSemaphore = CreateSemaphore(NULL, 1, 1, TEXT("processSemaphore"));
+    if (hSemaphore == NULL) {
+        _tprintf(TEXT("Could not create semaphore (%d).\n"), GetLastError());
+        return 1;
+    }
 
    hMapFile = CreateFileMapping(
                  INVALID_HANDLE_VALUE,    // use paging file
@@ -47,19 +55,42 @@ int _tmain()
    }
 
    do {
+      // Acquire the semaphore before accessing shared memory
+      printf("Waiting...\n");
+      DWORD dwWaitResult = WaitForSingleObject(hSemaphore, INFINITE);
+      // discards the input buffer
+       if(cin.fail()){
+         cin.clear();
+         cin.ignore(numeric_limits<streamsize>::max());
+      }
+
       printf("Input your message to B: ");
       scanf("%255[^\n]",szMsg);
       CopyMemory((PVOID)pBuf, szMsg, (max(_tcslen(pBuf), _tcslen(szMsg)) * sizeof(TCHAR)));
+        
       printf("Message has sent! Wait for B...\n");
+      // Release the semaphore
+      ReleaseSemaphore(hSemaphore, 1, NULL);
+
        _getch();
+
+      printf("Waiting...\n");
+      WaitForSingleObject(hSemaphore, INFINITE);
+      // discards the input buffer
+       if(cin.fail()){
+         cin.clear();
+         cin.ignore(numeric_limits<streamsize>::max());
+      }
+
       printf("Process B's message: %s\n",pBuf);
+      ReleaseSemaphore(hSemaphore, 1, NULL);
        _getch();
       printf("Do you want to continue? 1.Yes; Any to cancel\n");
       int choice;
       cin >> choice;
       getchar();
       if (choice != 1) continueProc = false;
-   } while(continueProc);
+   } while (continueProc);
    
    UnmapViewOfFile(pBuf);
 
